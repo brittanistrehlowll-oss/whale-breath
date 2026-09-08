@@ -1,4 +1,4 @@
-# install.ps1 — 鲸息 V1.0.1 安装（jingxi Skill 动作之一）
+# install.ps1 — 鲸息 V1.0.2 安装（jingxi Skill 动作之一）
 #
 # 部署：从仓库根目录部署 dsh-jingxi 插件包到各 DSH home 的
 #       profiles/node_modules/dsh-jingxi，并注册 cordis 插件行。
@@ -103,7 +103,7 @@ foreach ($targetHome in $targets) {
     if ($patch -match 'name:\s*dsh-jingxi') {
       Ok "web profile 已注册 dsh-jingxi（幂等）"
     } else {
-      $patch += "`n# dsh-jingxi V1.0.1 Pure Breath (installed by jingxi skill)`n- insert:`n    - id: jingxi`n      name: dsh-jingxi`n      inject: [webServer]`n"
+      $patch += "`n# dsh-jingxi V1.0.2 Pure Breath (installed by jingxi skill)`n- insert:`n    - id: jingxi`n      name: dsh-jingxi`n      inject: [webServer]`n"
       Set-Content -Path $patchPath -Value $patch -Encoding UTF8
       Ok "cordis.patch.yml 已写入 dsh-jingxi 包式行（inject: [webServer]）"
     }

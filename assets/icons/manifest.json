@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "name": "Jingxi Icon System V1.5",
   "designVersion": "V1.5",
-  "productVersion": "V1.0.1",
+  "productVersion": "V1.0.2",
   "supersedes": "V1.0 asset paths remain compatible; V1.5 runtime semantics take precedence on the updated surfaces. V1.0.1 Pure Breath removes all quota/billing layers and groups.",
   "canvas": {
     "width": 128,

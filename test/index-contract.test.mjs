@@ -59,7 +59,7 @@ test('status uses package version and breath endpoint distinguishes no session f
   await handlers.get('/api/jingxi/status')({ method: 'GET' }, statusResponse.response)
   const status = JSON.parse(statusResponse.result.body)
   assert.equal(status.packageVersion, PACKAGE_METADATA.version)
-  assert.equal(status.designVersion, 'V1.0.1')
+  assert.equal(status.designVersion, 'V1.0.2')
   assert.equal(status.jingxiVersion, status.packageVersion)
 
   const breathResponse = responseRecorder()
