@@ -8,11 +8,12 @@
 
 只呈现基础调用事实与呼吸轨迹，别无他物。
 
-[![版本](https://img.shields.io/badge/版本-V1.0.4_Pure_Breath-002FA7?style=for-the-badge&labelColor=gray)](https://github.com/brittanistrehlowll-oss/whale-breath/releases/tag/V1.0.4)
-[![许可证](https://img.shields.io/badge/许可证-MIT-2E8B57?style=for-the-badge&labelColor=gray)](LICENSE)
-[![DSH](https://img.shields.io/badge/DSH-0.1.x-000000?style=for-the-badge&labelColor=gray)](https://github.com/anywhere-labs/dsh-desktop)
-[![测试](https://img.shields.io/badge/测试-220%2F220_通过-07C160?style=for-the-badge&labelColor=gray)](#-测试)
+[![版本](docs/images/badges/version.svg)](https://github.com/brittanistrehlowll-oss/whale-breath/releases/tag/V1.0.4)
+[![许可证](docs/images/badges/license.svg)](LICENSE)
+[![DSH](docs/images/badges/dsh.svg)](https://github.com/anywhere-labs/dsh-desktop)
+[![测试](docs/images/badges/tests.svg)](#-测试)
 [![CI](https://github.com/brittanistrehlowll-oss/whale-breath/actions/workflows/test.yml/badge.svg)](https://github.com/brittanistrehlowll-oss/whale-breath/actions/workflows/test.yml)
+[![Node](docs/images/badges/node.svg)](#-测试)
 
 [实机界面](#-实机界面) · [特性](#-特性一览) · [呼吸语言](#-呼吸语言) · [快速开始](#-快速开始) · [架构](#-架构) · [测试](#-测试) · [路线图](#-路线图)
 
