@@ -1,4 +1,4 @@
-# 鲸息部署架构（jingxi V1.0.3 Pure Breath）
+# 鲸息部署架构（jingxi V1.0.4 Pure Breath）
 
 V1.0.1 起鲸息是**纯 cordis 插件包**，无独立 Host / Guardian / 离线页，
 无任何长期运行进程。

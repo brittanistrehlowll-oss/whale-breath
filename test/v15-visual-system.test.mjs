@@ -19,7 +19,7 @@ test('V1.5 manifest registers the split runtime/status/spout icon library (V1.0.
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
   assert.equal(manifest.schemaVersion, 1)
   assert.equal(manifest.designVersion, 'V1.5')
-  assert.equal(manifest.productVersion, 'V1.0.3')
+  assert.equal(manifest.productVersion, 'V1.0.4')
   assert.equal(manifest.canvas.background, 'transparent')
 
   for (const [group, id, path] of requiredAssets) {
