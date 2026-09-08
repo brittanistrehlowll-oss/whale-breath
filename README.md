@@ -8,7 +8,7 @@
 
 只呈现基础调用事实与呼吸轨迹，别无他物。
 
-[![版本](https://img.shields.io/badge/版本-V1.0.2_Pure_Breath-002FA7?style=for-the-badge&labelColor=gray)](https://github.com/brittanistrehlowll-oss/whale-breath/releases/tag/V1.0.2)
+[![版本](https://img.shields.io/badge/版本-V1.0.3_Pure_Breath-002FA7?style=for-the-badge&labelColor=gray)](https://github.com/brittanistrehlowll-oss/whale-breath/releases/tag/V1.0.3)
 [![许可证](https://img.shields.io/badge/许可证-MIT-2E8B57?style=for-the-badge&labelColor=gray)](LICENSE)
 [![DSH](https://img.shields.io/badge/DSH-0.1.x-000000?style=for-the-badge&labelColor=gray)](https://github.com/anywhere-labs/dsh-desktop)
 [![测试](https://img.shields.io/badge/测试-220%2F220_通过-07C160?style=for-the-badge&labelColor=gray)](#-测试)
@@ -30,6 +30,8 @@
 - **V1.0.1 Pure Breath**：剥离计费/额度与中间面板，界面只剩事实与轨迹。
 - **V1.0.2 可靠修复版**：安装/更新脚本重写（装得上、可回滚）、会话切换不再卡死、
   刷新不再闪清、后端默认只读、CI 上线。
+- **V1.0.3 视觉优化版**：空态破版与顶栏孤字修复、事故 token 归零、事实卡按
+  「节奏 → 量级 → 健康」重排、文案全面中文化打磨（多专家评审驱动）。
 
 ## 🖼️ 实机界面
 
@@ -41,10 +43,10 @@
 
 | 图中可见 | 说明 |
 | --- | --- |
-| 五张事实卡 | Token 总量、会话时长（附真实运行 ID）、轮次/步数、当前 Turn 工具次数、异常/重试 |
-| Breath Curve 区 | 速度曲线 + 事件刻度 + 图例；采样不足时展示**真实空态文案**而非伪造曲线 |
-| 空态文案 | 「不会混用最近 Turn 的曲线」——fail-closed 不是口号，是界面默认行为 |
-| 顶栏 | 线程状态、速度、Cache 命中率、自动刷新节拍（5s） |
+| 五张事实卡 | 按「节奏 → 量级 → 健康」排列：会话时长（中文时分秒 + 运行号）、轮次·步数、Token 总量、工具调用、异常/重试；空值自动降级为灰调「—」 |
+| 呼吸曲线区 | 速度曲线 + 事件刻度 + 图例；图例空态自动降级（灰字 + 空心标记） |
+| 空态呈现 | 鲸鱼品牌锚点 + 居中短文案「暂不绘制」——fail-closed 不是口号，是界面默认行为 |
+| 顶栏 | 线程状态与数据来源、速度、缓存命中率、「自动刷新 · Ns」节拍 |
 
 **侧栏鲸鱼入口** —— rail 收起态常驻，wide 展开态附带线程状态与 tok/s：
 
@@ -146,6 +148,7 @@ CLI home 与 Desktop harness home 两种部署形态均同步验证通过。
 
 - [x] **V1.0.1 Pure Breath** —— 剥离计费/额度，侧栏入口直达呼吸轨迹
 - [x] **V1.0.2 可靠修复版** —— 安装/更新重写、会话切换修复、刷新状态机、后端默认只读、CI
+- [x] **V1.0.3 视觉优化版** —— 空态/顶栏破版修复、事故 token 归零、事实卡重排、文案中文打磨
 - [ ] 受控更新通道（`jingxiOps` 已预留开关）
 - [ ] Perfect Breath 分享（share 层已预留）
 - [ ] 更多轨迹解读维度

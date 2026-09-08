@@ -437,10 +437,10 @@ test('Reference workbench keeps the cache fact in one aligned KPI with data cont
     const cacheKpi = tree.find((node) => node.props?.className === 'jx-header-fact' && node.props?.['data-header-fact'] === 'cache')
     const quality = cacheKpi && walk(cacheKpi).find((node) => node.props?.className === 'jx-fact__meta')
     assert.ok(cacheKpi, 'The reference workbench should expose one Cache KPI')
-    assert.ok(quality, 'Known cache ratios should expose one data context line')
+    assert.equal(quality, undefined, 'The cache chip no longer duplicates its label in a meta line')
     assert.match(textContent(cacheKpi), new RegExp(expected.value))
     assert.equal(cacheKpi.props['data-quality'], expected.tier, `${expected.value} keeps its internal colour tier`)
-    assert.match(textContent(quality), /缓存命中/u, 'the quality context line stays pure Chinese data copy')
+    assert.match(textContent(cacheKpi), /缓存命中率/u, 'the cache chip keeps its pure Chinese label')
     assert.doesNotMatch(textContent(cacheKpi), /(?:GOOD|GREAT|PERFECT)/u)
   }
 })
@@ -480,14 +480,14 @@ test('Reference workbench follows the supplied effect image anatomy and keeps re
   assert.equal(facts.length, 5, 'the first screen keeps exactly five metric cards')
   assert.equal(facts.every((node) => walk(node).some((child) => child.props?.className === 'jx-fact__value')), true)
   const cacheFact = result.tree.find((node) => node.props?.className === 'jx-header-fact' && node.props?.['data-header-fact'] === 'cache')
-  const statusFact = walk(result.tree).find((node) => node.props?.className === 'jx-title-lockup' && textContent(node).includes('线程状态'))
-  assert.ok(walk(cacheFact).find((node) => node.props?.className === 'jx-fact__meta'), 'cache keeps its quality context line')
+  const statusFact = walk(result.tree).find((node) => node.props?.className === 'jx-breath-subtitle__status')
+  assert.equal(walk(cacheFact).find((node) => node.props?.className === 'jx-fact__meta'), undefined, 'cache chip drops its redundant meta line')
   assert.match(textContent(statusFact), /生成中/u, 'a live session keeps the generating status in the header (v2.1)')
   assert.doesNotMatch(result.source, /jx-dashboard-kpi__spinner/u, 'the plugin spinner is removed')
   const tokenKpi = result.tree.find((node) => node.props?.['data-metric'] === 'tokens')
   assert.match(textContent(tokenKpi), /4\.20M/u, 'token facts live in the KPI row (v2.1)')
   const durationKpi = result.tree.find((node) => node.props?.['data-metric'] === 'duration')
-  assert.match(textContent(durationKpi), /7m0s/u, 'duration = trajectory wall-clock span (v2.1)')
+  assert.match(textContent(durationKpi), /7 分/u, 'duration = trajectory wall-clock span (v2.1)')
 
   const curve = result.tree.find((node) => node.props?.className === 'jx-curve')
   assert.ok(curve, 'v2.1: the curve card is the single trajectory timeline')
@@ -512,14 +512,14 @@ test('Reference workbench keeps the cache quality context single and shows threa
   const { tree } = await renderBreathCurve([45, 50, 25], undefined, undefined, 'completed', { cachePct: 0.9831 })
   const cacheKpi = tree.find((node) => node.props?.className === 'jx-header-fact' && node.props?.['data-header-fact'] === 'cache')
   const qualityLabels = walk(cacheKpi).filter((node) => node.props?.className === 'jx-fact__meta')
-  const statusFact = walk(tree).find((node) => node.props?.className === 'jx-title-lockup' && textContent(node).includes('线程状态'))
+  const statusFact = walk(tree).find((node) => node.props?.className === 'jx-breath-subtitle__status')
   const header = walk(tree).find((node) => node.props?.className === 'jx-header')
 
-  assert.equal(qualityLabels.length, 1, 'Cache quality keeps one semantic label')
+  assert.equal(qualityLabels.length, 0, 'Cache chip keeps a single label without a duplicate meta line')
   assert.equal(cacheKpi.props['data-quality'], 'medium', '98.31% keeps the medium internal colour tier')
   assert.doesNotMatch(textContent(cacheKpi), /(?:GOOD|GREAT|PERFECT)/u, 'no English cache status word reaches the UI')
   assert.match(textContent(header), /鲸息.*运行轨迹/u)
-  assert.match(textContent(statusFact), /线程状态：已完成/u, 'the status fact carries the current thread status')
+  assert.match(textContent(statusFact), /已完成/u, 'the status line carries the current thread status')
 })
 
 
@@ -906,7 +906,7 @@ test('Reference KPI cards expose the session speed and cache quality context', a
   assert.ok(cacheKpi, 'Reference Breath should expose the cache fact')
   assert.match(textContent(rateKpi), /74\s*tok\/s/u)
   assert.match(textContent(cacheKpi), /98\.31%/u)
-  assert.ok(walk(cacheKpi).some((node) => node.props?.className === 'jx-fact__meta'))
+  assert.equal(walk(cacheKpi).some((node) => node.props?.className === 'jx-fact__meta'), false, 'the cache chip drops its duplicate meta line')
   assert.match(result.source, /\.jx-fact__value\{/u)
 })
 
@@ -928,7 +928,7 @@ test('Reference KPI cards keep the speed and cache lockups aligned in the same g
   })
   const facts = result.tree.filter((node) => node.props?.className === 'jx-fact')
   assert.equal(facts.length, 5, 'the first screen keeps the three audit facts')
-  assert.deepEqual(facts.map((node) => node.props['data-metric']), ['tokens', 'duration', 'rounds', 'tools', 'errors'])
+  assert.deepEqual(facts.map((node) => node.props['data-metric']), ['duration', 'rounds', 'tokens', 'tools', 'errors'])
   assert.match(result.source, /\.jx-breath-facts\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\);/u)
 })
 
@@ -975,8 +975,8 @@ test('Breath keeps a three-fact runtime band without duplicating host lifecycle 
   })
   const facts = result.tree.filter((node) => node.props?.className === 'jx-fact')
   assert.equal(facts.length, 5, 'the band keeps the five metric cards')
-  assert.deepEqual(facts.map((node) => node.props['data-metric']), ['tokens', 'duration', 'rounds', 'tools', 'errors'])
-  const statusFact = walk(result.tree).find((node) => node.props?.className === 'jx-title-lockup' && textContent(node).includes('线程状态'))
+  assert.deepEqual(facts.map((node) => node.props['data-metric']), ['duration', 'rounds', 'tokens', 'tools', 'errors'])
+  const statusFact = walk(result.tree).find((node) => node.props?.className === 'jx-breath-subtitle__status')
   assert.match(textContent(statusFact), /完成/u)
   const tokenKpi = result.tree.find((node) => node.props?.['data-metric'] === 'tokens')
   assert.match(textContent(tokenKpi), /7\.37M/u, 'the token total lives in the KPI row (v2.1)')
@@ -1007,7 +1007,7 @@ test('Breath header exposes the current thread state and data freshness beside t
 
   assert.ok(note, 'Breath header should retain a visible status line below the title')
   assert.equal(note.props['data-thread-status'], 'stable')
-  assert.match(textContent(note), /线程状态：已完成/u)
+  assert.match(textContent(note), /已完成/u)
   assert.match(textContent(note), /已保存快照 · 刷新可重新抓取/u)
 })
 
@@ -1422,7 +1422,8 @@ test('BreathCurve never mixes a sparse session trajectory with the latest Turn c
 
   assert.equal(curve.props['data-trajectory-source'], 'session')
   assert.equal(curve.props['data-curve-state'], 'empty')
-  assert.match(textContent(empty), /会话轨迹.*速度采样不足/u)
+  assert.match(textContent(empty), /速度采样不足/u)
+  assert.match(textContent(empty), /当前会话/u, 'the session copy stays honest about the current session')
   assert.doesNotMatch(textContent(empty), /更多采样后/u, 'The message must not imply that another Turn can complete this session plot')
 })
 
@@ -1679,15 +1680,15 @@ test('Collapsed sidebar maps an interrupted turn to the official error state wit
 
 test('All terminal failure statuses use the same red Jingxi state across the workbench and sidebar', async () => {
   const cases = [
-    ['interrupted', '线程状态：已中断'],
-    ['aborted', '线程状态：已终止'],
-    ['error', '线程状态：异常'],
-    ['max-tokens', '线程状态：已达到 Token 上限'],
+    ['interrupted', '已中断'],
+    ['aborted', '已终止'],
+    ['error', '异常'],
+    ['max-tokens', '已达到 Token 上限'],
   ]
 
   for (const [status, expectedCopy] of cases) {
     const result = await renderBreathCurve([45, 50, 25], undefined, undefined, status)
-  const statusFact = walk(result.tree).find((node) => node.props?.className === 'jx-title-lockup' && textContent(node).includes('线程状态'))
+  const statusFact = walk(result.tree).find((node) => node.props?.className === 'jx-breath-subtitle__status')
     const sidebarStatus = walk(result.footerTree).find((node) => node.props?.className === 'jx-fc-status__label')
     const eventRail = result.tree.find((node) => node.props?.className === 'jx-event-rail')
     const mark = result.railFooterTree.find((node) => node.props?.['data-jx-runtime-mark'] === 'true')
@@ -2062,7 +2063,7 @@ test('Sidebar waits for real turn data without a settled turn', async () => {
   const firstStatus = walk(result.footerTree).find((node) => node.props?.className === 'jx-fc-status-block')
   const sidebarText = firstStatus ? textContent(walk(firstStatus)) : ''
   assert.match(sidebarText, /等待下一轮/u)
-  assert.match(sidebarText, /等待真实 Turn 数据/u, 'no fabricated zero-completion list')
+  assert.match(sidebarText, /等待下一轮/u, 'no fabricated zero-completion list')
 })
 
 test('Breath production code keeps zero hard-coded turn counts', async () => {
@@ -2214,7 +2215,7 @@ test('Expanded sidebar keeps one current-Turn sentence and omits idle or reset-t
   const rateRow = walk(result.footerTree).find((node) => node.props?.className === 'jx-fc-entry__rate')
   assert.equal(rateRow, undefined, 'an interrupted turn hides the stale rate row (V5.9 review #1)')
   assert.doesNotMatch(footerText, /重置/u, 'reset timing belongs to quota detail, not the compact sidebar')
-  assert.match(textContent(result.tree), /线程状态：已中断/u, 'the dialog names the interrupted thread status honestly')
+  assert.match(textContent(walk(result.tree).find((node) => node.props?.className === 'jx-breath-subtitle__status')), /已中断/u, 'the dialog names the interrupted thread status honestly')
 })
 
 test('Sidebar fails closed when only session-level trajectory counts are available', async () => {
@@ -2235,7 +2236,7 @@ test('Sidebar fails closed when only session-level trajectory counts are availab
   const sidebarText = textContent(result.footerTree)
 
   assert.match(sidebarText, /最近 Turn #17/u, 'the current thread sentence remains visible')
-  assert.match(sidebarText, /等待真实 Turn 数据/u)
+  assert.match(sidebarText, /等待下一轮/u)
   assert.doesNotMatch(sidebarText, /本会话累计/u)
 })
 
@@ -2637,10 +2638,10 @@ test('V5.6 S2: subagent dock shows empty state without real agent events and nev
     lastSegments: [{ kind: 'tool', startMs: 100, endMs: 300 }],
     eventTicks: [{ tMs: 100, kind: 'tool' }],
   })
-  const dock = walk(result.tree).find((node) => node.props?.['aria-label'] === '子代理调用')
+  const dock = walk(result.tree).find((node) => node.props?.['aria-label'] === '子代理')
   assert.ok(dock, 'subagent dock should render')
   const dockText = textContent(walk(dock))
-  assert.match(dockText, /暂无子代理调用/u, 'empty state without agent events')
+  assert.match(dockText, /暂无调用/u, 'empty state without agent events')
   assert.doesNotMatch(dockText, /Luna|模型未上报/u, 'no model impersonation')
   assert.equal(walk(dock).filter((node) => node.props?.['data-status']).length, 0, 'no fabricated agent cards')
   // populated state via last.subagents (P1 contract reserve)
@@ -2649,7 +2650,7 @@ test('V5.6 S2: subagent dock shows empty state without real agent events and nev
     lastSegments: [{ kind: 'model', startMs: 0, endMs: 100 }],
     lastSubagents: [{ id: 'ab12cd34', name: '核验', status: 'ok' }],
   })
-  const populatedDock = walk(populated.tree).find((node) => node.props?.['aria-label'] === '子代理调用')
+  const populatedDock = walk(populated.tree).find((node) => node.props?.['aria-label'] === '子代理')
   assert.match(textContent(walk(populatedDock)), /子代理 1 个/u, 'populated state renders real agent entries')
 })
 
@@ -2675,7 +2676,7 @@ test('V5.8 P2.3: subagent dock maps the five statuses to Chinese copy and colors
       rate: { value: 42, quality: 'estimated' },
     })),
   })
-  const dock = walk(result.tree).find((node) => node.props?.['aria-label'] === '子代理调用')
+  const dock = walk(result.tree).find((node) => node.props?.['aria-label'] === '子代理')
   assert.ok(dock, 'subagent dock should render the populated state')
   const items = walk(dock).filter((node) => node.props?.['data-depth'] === '1')
   assert.equal(items.length, 5, 'each status should render one top-level card')
@@ -2710,7 +2711,7 @@ test('V5.8 P2.3: subagent dock renders two levels and merges deeper nodes into �
       { id: 'c', parentId: 'b', label: '复核', status: 'cancelled', durationMs: 100 },
     ],
   })
-  const dock = walk(result.tree).find((node) => node.props?.['aria-label'] === '子代理调用')
+  const dock = walk(result.tree).find((node) => node.props?.['aria-label'] === '子代理')
   assert.ok(dock, 'subagent dock should render')
   const items = walk(dock).filter((node) => node.props?.['data-depth'])
   assert.equal(items.filter((node) => node.props?.['data-depth'] === '1').length, 1, 'one top-level card')
@@ -2738,9 +2739,9 @@ test('V5.8 P2.3: empty dock stays honest and never infers agents from tool event
     lastSegments: [{ kind: 'tool', startMs: 100, endMs: 300 }, { kind: 'model', startMs: 300, endMs: 500 }],
     eventTicks: [{ tMs: 100, kind: 'tool' }],
   })
-  const dock = walk(result.tree).find((node) => node.props?.['aria-label'] === '子代理调用')
+  const dock = walk(result.tree).find((node) => node.props?.['aria-label'] === '子代理')
   assert.ok(dock, 'subagent dock should render')
-  assert.match(textContent(dock), /暂无子代理调用/u, 'no real agent events keeps the empty state')
+  assert.match(textContent(dock), /暂无调用/u, 'no real agent events keeps the empty state')
   assert.equal(walk(dock).filter((node) => node.props?.['data-depth']).length, 0, 'tool events must not fabricate agent cards')
   assert.equal(walk(dock).filter((node) => node.props?.['data-status']).length, 0, 'no fabricated status cells')
   assert.doesNotMatch(textContent(dock), /Luna|模型未上报/u, 'no model impersonation in the empty state')
@@ -2932,7 +2933,7 @@ test('V5.8 P2.1: Breath header keeps title, rate, cache, auto-refresh, refresh a
   const chips = walk(facts).filter((node) => node.props?.['data-header-fact'])
   assert.deepEqual(chips.map((node) => node.props['data-header-fact']), ['rate', 'cache'], 'rate then cache inside the header facts')
   assert.match(textContent(chips[0]), /实时速度.*33\s*tok\/s|33\s*tok\/s.*实时速度/u, 'the header rate chip carries the live speed value')
-  assert.match(textContent(chips[1]), /Cache 命中率.*97\.49%/u, 'the header cache chip carries the cache value')
+  assert.match(textContent(chips[1]), /缓存命中率.*97\.49%/u, 'the header cache chip carries the cache value')
 
   const actionButtons = walk(actions).filter((node) => node.type === 'button')
   const autoRefresh = actionButtons.find((node) => node.props?.['data-jx-auto-refresh'] === 'true')
@@ -3005,7 +3006,8 @@ test('V5.8 P2.1: GREAT/PERFECT/GOOD status words are removed from user-visible c
   assert.ok(cacheKpi, 'the cache fact stays visible')
   assert.equal(cacheKpi.props['data-quality'], 'high', 'a 99% cache keeps its internal colour tier')
   const meta = walk(cacheKpi).find((node) => node.props?.className === 'jx-fact__meta')
-  assert.match(textContent(meta), /缓存命中/u, 'the meta line uses pure Chinese data copy')
+  assert.equal(meta, undefined, 'the cache chip drops its duplicate meta line')
+  assert.match(textContent(cacheKpi), /缓存命中率/u, 'the chip label stays pure Chinese data copy')
   assert.doesNotMatch(textContent(result.tree), /Avg Speed/u, 'no English status suffix remains')
   const headerFacts = result.tree.find((node) => node.props?.className === 'jx-header-facts')
   assert.ok(headerFacts, 'the same-layer header keeps the rate/cache facts')

@@ -38,7 +38,7 @@ test('Breath is a focused Jingxi workbench while the host shell remains native',
   assert.match(surface, /h\(CurveLegend/u, 'v2.1: the curve legend is the single trajectory legend')
   assert.match(surface, /className: 'jx-curve'/u, 'v2.1: the curve card is the single timeline view')
 
-  assert.match(surface, /label: 'Cache 命中率'/u)
+  assert.match(surface, /label: '缓存命中率'/u)
   assert.match(surface, /缓存命中/u)
   assert.match(surface, /Breath Curve/u)
   assert.match(surface, /jx-phase-narrative/u)

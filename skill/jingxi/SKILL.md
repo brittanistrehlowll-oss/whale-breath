@@ -3,12 +3,12 @@ name: jingxi
 description: 安装、升级、诊断、打开和卸载鲸息（DeepSeek Harness 的轻量伴生插件：侧栏鲸鱼入口直达呼吸轨迹）
 disable-model-invocation: true
 user-invocable: true
-jingxiVersion: 1.0.2
+jingxiVersion: 1.0.3
 ---
 
 # jingxi — 鲸息
 
-鲸息（jingxi）V1.0.2（Pure Breath）是 DeepSeek Harness 的轻量伴生插件：
+鲸息（jingxi）V1.0.3（Pure Breath）是 DeepSeek Harness 的轻量伴生插件：
 侧边栏一个鲸鱼入口，**点击直达呼吸轨迹浮层**——只呈现基础调用事实
 （轮次/步数、Token、时长、Cache 命中、速度）与呼吸曲线（事件刻度、Event
 Rail、最近 5 轮、阶段故事）。计费/额度、中间面板、侧栏快捷操作行与版本行
