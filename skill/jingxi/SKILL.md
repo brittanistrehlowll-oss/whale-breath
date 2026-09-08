@@ -21,11 +21,11 @@ Rail、最近 5 轮、阶段故事）。计费/额度、中间面板、侧栏快
 
 | 动作 | 命令 | 说明 |
 |---|---|---|
-| 安装鲸息 | 运行 `scripts/install.ps1` | 部署 dsh-jingxi 插件包到 `profiles/node_modules/dsh-jingxi` 并注入 cordis 插件行；幂等 |
-| 打开鲸息 | 运行 `scripts/open.ps1` | 打开鲸息页面（DSH 内或 Jingxi Host 离线页） |
-| 升级鲸息 | 运行 `scripts/update.ps1` | 更新鲸息自身（**不是**更新 DSH） |
-| 诊断鲸息 | 运行 `scripts/doctor.ps1` | 检查 DSH / Host / Guardian / 插件 / 更新能力 |
-| 卸载鲸息 | 运行 `scripts/uninstall.ps1` | 按 manifest 删除鲸息拥有的文件；不删 DSH 数据 |
+| 安装鲸息 | 运行 `scripts/install.ps1` | 从仓库根目录部署 dsh-jingxi 插件包到各 DSH home 的 `profiles/node_modules/dsh-jingxi` 并注入 cordis 插件行；自动探测 CLI/Desktop home；幂等 |
+| 打开鲸息 | 运行 `scripts/open.ps1` | 打开 DSH 内的鲸息页面（http://127.0.0.1:3080/jingxi） |
+| 升级鲸息 | 运行 `scripts/update.ps1` | 更新鲸息自身（**不是**更新 DSH）；git pull 失败即终止，部署前备份、失败自动回滚 |
+| 诊断鲸息 | 运行 `scripts/doctor.ps1` | 校验真实部署物：包文件齐全 + 注册行存在 + 版本一致（只读） |
+| 卸载鲸息 | 运行 `scripts/uninstall.ps1` | 只移除真实部署物（包目录 + 注册行 + manifest）；幂等，不碰未知文件与 DSH 数据 |
 
 ## 执行规则
 
@@ -40,9 +40,9 @@ Rail、最近 5 轮、阶段故事）。计费/额度、中间面板、侧栏快
 
 ## 参考
 
-- `references/architecture.md` — 鲸息运行时架构（Plugin / Host / Guardian / Update Core）
+- `references/architecture.md` — 鲸息部署架构（V1.0.1：纯插件包，无独立 Host/Guardian）
 - `references/troubleshooting.md` — 常见问题
 
 ## 卸载承诺
 
-`uninstall.ps1` 只删除 `manifest.json` 中登记的文件；DSH 数据、设置、会话不受影响。
+`uninstall.ps1` 只移除真实部署物（包目录 + 注册行 + manifest）；DSH 数据、设置、会话不受影响。

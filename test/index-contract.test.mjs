@@ -456,6 +456,25 @@ test('persisted Breath snapshots remain parseable when writes overlap', async ()
   }
 })
 
+test('lifecycle mutation route stays unregistered by default and requires explicit jingxiOps opt-in', () => {
+  // V1.0.1 纯粹版默认只读：写端点 /api/jingxi/lifecycle 在路由层不存在，
+  // 其余只读端点保持注册；显式注入 jingxiOps: true 才恢复注册。
+  const defaultHandlers = makePluginHarness()
+  assert.equal(defaultHandlers.has('/api/jingxi/lifecycle'), false, '默认配置下 lifecycle 写端点不注册')
+  for (const path of [
+    '/api/jingxi/status',
+    '/api/jingxi/update',
+    '/api/jingxi/update-check',
+    '/api/jingxi/update/status',
+    '/api/jingxi/breath/current',
+  ]) {
+    assert.equal(typeof defaultHandlers.get(path), 'function', `${path} 只读端点应保持注册`)
+  }
+
+  const opsHandlers = makePluginHarness(undefined, { jingxiOps: true })
+  assert.equal(typeof opsHandlers.get('/api/jingxi/lifecycle'), 'function', '显式 jingxiOps: true 时写端点注册')
+})
+
 test('update check exposes a read-only compatibility alias and a stable failure status', async () => {
   const originalFetch = globalThis.fetch
   try {

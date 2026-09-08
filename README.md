@@ -11,8 +11,9 @@
 [![版本](https://img.shields.io/badge/版本-V1.0.1_Pure_Breath-002FA7?style=for-the-badge&labelColor=gray)](https://github.com/brittanistrehlowll-oss/whale-breath/releases/tag/V1.0.1)
 [![许可证](https://img.shields.io/badge/许可证-MIT-2E8B57?style=for-the-badge&labelColor=gray)](LICENSE)
 [![DSH](https://img.shields.io/badge/DSH-0.1.x-000000?style=for-the-badge&labelColor=gray)](https://github.com/anywhere-labs/dsh-desktop)
-[![测试](https://img.shields.io/badge/测试-213%2F213_通过-07C160?style=for-the-badge&labelColor=gray)](#-测试)
-[![Node](https://img.shields.io/badge/Node-22-339933?style=for-the-badge&labelColor=gray&logo=nodedotjs)](#-测试)
+[![测试](https://img.shields.io/badge/测试-220%2F220_通过-07C160?style=for-the-badge&labelColor=gray)](#-测试)
+[![CI](https://github.com/brittanistrehlowll-oss/whale-breath/actions/workflows/test.yml/badge.svg)](https://github.com/brittanistrehlowll-oss/whale-breath/actions/workflows/test.yml)
+[![Node](https://img.shields.io/badge/Node-22_|_24-339933?style=for-the-badge&labelColor=gray&logo=nodedotjs)](#-测试)
 
 [特性](#-特性一览) · [界面](#-界面展示) · [呼吸语言](#-呼吸语言) · [快速开始](#-快速开始) · [架构](#-架构) · [测试](#-测试) · [路线图](#-路线图)
 
@@ -129,8 +130,9 @@ powershell -ExecutionPolicy Bypass -File skill/jingxi/scripts/install.ps1
 ```
 
 > [!TIP]
-> DSH Desktop 用户的 harness home 在 `%APPDATA%/dsh-desktop/harness/`，需同步部署；
-> 卸载、诊断等更多脚本见 `skill/jingxi/scripts/`，完整说明见 `skill/jingxi/SKILL.md`。
+> 安装脚本会**自动探测** CLI home 与 Desktop harness（`%APPDATA%/dsh-desktop/harness/`）
+> 并逐端部署与校验；源文件缺失会在任何写动作之前终止，绝不留「假完成」。
+> 更新（含备份回滚）、卸载、诊断脚本见 `skill/jingxi/scripts/`，完整说明见 `skill/jingxi/SKILL.md`。
 
 ## 🏗️ 架构
 
@@ -138,7 +140,7 @@ powershell -ExecutionPolicy Bypass -File skill/jingxi/scripts/install.ps1
 
 | 半区 | 文件 | 职责 |
 | --- | --- | --- |
-| **host 半** | `lib/index.js` · `lib/telemetry-fold.js` · `lib/dsh-update.js` · `lib/asset-route.js` | fail-closed API：遥测折叠、投影、只读更新检查、素材路由 |
+| **host 半** | `lib/index.js` · `lib/telemetry-fold.js` · `lib/dsh-update.js` · `lib/asset-route.js` | fail-closed API：遥测折叠、投影、只读更新检查、素材路由；**默认只读**——lifecycle 写端点（重启/更新）默认不注册，仅 `jingxiOps` 显式开启时注册（fail-closed 可选模块） |
 | **浏览器半** | `lib/client.js` | React 渲染：侧栏入口、呼吸轨迹浮层、Settings 区（DSH Native tokens） |
 
 ```text
@@ -162,9 +164,9 @@ docs/images/    README 用图（横幅、界面截图）
 node --test "test/*.test.mjs"
 ```
 
-当前基线：**213/213 通过**（Node 22）。测试 harness 用 `node:vm` 加载 `client.js`，
-配合自实现的 React shim 做组件级断言；CLI home 与 Desktop harness home
-两种部署形态均同步验证通过。
+当前基线：**220/220 通过**（Node 22 / 24，GitHub Actions 矩阵自动运行，见 CI 徽章）。
+测试 harness 用 `node:vm` 加载 `client.js`，配合自实现的 React shim 做组件级断言；
+CLI home 与 Desktop harness home 两种部署形态均同步验证通过。
 
 ## 🗺️ 路线图
 

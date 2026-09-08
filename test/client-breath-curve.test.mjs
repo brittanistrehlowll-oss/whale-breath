@@ -12,6 +12,30 @@ function elementTree(type, props, children) {
   return { type, props: props ?? {}, children }
 }
 
+// 浏览器 AbortController 的最小 mock：signal 支持 aborted/reason 与 abort 监听，
+// 供 fetch mock 的 responder 在被取代/超时时以 AbortError 拒绝（与浏览器行为一致）。
+const makeAbortError = () => Object.assign(new Error('The operation was aborted'), { name: 'AbortError' })
+class MockAbortSignal {
+  constructor() {
+    this.aborted = false
+    this.reason = undefined
+    this._listeners = new Set()
+  }
+  addEventListener(type, listener) { if (type === 'abort') this._listeners.add(listener) }
+  removeEventListener(type, listener) { this._listeners.delete(listener) }
+  throwIfAborted() { if (this.aborted) throw makeAbortError() }
+  _fire() { for (const listener of [...this._listeners]) { try { listener() } catch { /* test rail */ } } }
+}
+class MockAbortController {
+  constructor() { this.signal = new MockAbortSignal() }
+  abort(reason) {
+    if (this.signal.aborted) return
+    this.signal.aborted = true
+    this.signal.reason = reason
+    this.signal._fire()
+  }
+}
+
 function walk(value, output = [], seen = new Set()) {
   if (!value || typeof value !== 'object') return output
   if (seen.has(value)) return output
@@ -104,6 +128,9 @@ async function renderBreathCurve(_legacyQuotaPercents = [45, 50, 25], lastSparkl
   let updateVerificationReads = 0
   let intervalCount = 0
   let clearCount = 0
+  // 手动计时器队列：breathService 的 12s 超时走这里的 setTimeout；测试用
+  // fireTimeout(ms) 精确触发，无需真实等待。focus-restore 的 0ms 兜底也在此队列。
+  const timeoutQueue = []
   const windowListeners = new Map()
   const documentListeners = new Map()
   const addListener = (map, type, listener) => {
@@ -242,6 +269,13 @@ async function renderBreathCurve(_legacyQuotaPercents = [45, 50, 25], lastSparkl
   const context = {
     window,
     document,
+    AbortController: MockAbortController,
+    setTimeout: (fn, ms) => {
+      const handle = { fn, ms, cleared: false, fired: false }
+      timeoutQueue.push(handle)
+      return handle
+    },
+    clearTimeout: (handle) => { if (handle) handle.cleared = true },
     fetch: (url, requestOptions = {}) => {
       requests.push({ url, options: requestOptions })
       // 乱序/延迟注入：breathResponses 为响应函数队列（每次 breath 请求消费一个）；
@@ -314,6 +348,13 @@ async function renderBreathCurve(_legacyQuotaPercents = [45, 50, 25], lastSparkl
     setDocumentHidden: (value) => { document.hidden = value },
     intervalCount: () => intervalCount,
     clearCount: () => clearCount,
+    // 触发第一个「未清除且未触发、延时为 ms」的计时器回调（如 breath 12s 超时）。
+    fireTimeout: (ms) => {
+      const handle = timeoutQueue.find((entry) => !entry.cleared && !entry.fired && entry.ms === ms)
+      if (handle) { handle.fired = true; handle.fn() }
+      return handle
+    },
+    pendingTimeouts: () => timeoutQueue.filter((entry) => !entry.cleared && !entry.fired),
     source,
   }
 }
@@ -2234,34 +2275,39 @@ test('Breath drops a late response after a newer load (epoch guard)', async () =
     allowEmptyCurve: true,
     breathResponses: [() => Promise.resolve(breathResponse({ ok: true, source: 'real', view: { live: { rateQuality: 'exact', estimateRateTokS: 1 }, last: undefined, recent: [] } })), () => stale.promise, () => fresh.promise],
   })
-  // 初始 load 挂起：UI 处于 loading 空态（无旧视图可显示）。
+  // 打开浮层的 force load 挂起（stale gate）：已有帧（实时 1）被保留并打「更新中」
+  // 轻量标记——同一会话刷新不清空、不闪烁。
   let tree = walk(result.breathComponent({}))
-  assert.match(textContent(rateFactOf(tree)), /等待速度数据/u, 'a pending load must stay in the waiting empty state')
+  assert.match(textContent(rateFactOf(tree)), /实时(?:速度)?\s*1/u, 'a pending refresh keeps the previous frame instead of clearing it')
+  assert.match(textContent(walk(tree).find((node) => node.props?.className === 'jx-breath-subtitle__status')), /更新中/u, 'the lightweight updating hint shows while the refresh is in flight')
 
-  // 新 load（epoch 2）的响应先到并提交：exact → 「实时 33」。
+  // 手动刷新（epoch 3）取代挂起的 load：旧请求被 abort，视图仍保帧。
   refreshBreath(tree)
+  assert.equal(result.requests[1]?.options?.signal?.aborted, true, 'a newer load aborts the superseded in-flight request')
   tree = walk(result.breathComponent({}))
-  assert.match(textContent(rateFactOf(tree)), /等待速度数据/u, 'a second load clears the view until its response commits')
+  assert.match(textContent(rateFactOf(tree)), /实时(?:速度)?\s*1/u, 'the superseding refresh still keeps the frame while pending')
   fresh.resolve(breathResponse({ ok: true, source: 'real', view: { live: { rateQuality: 'exact', estimateRateTokS: 33 }, last: undefined, recent: [] } }))
   await new Promise((resolve) => setImmediate(resolve))
   tree = walk(result.breathComponent({}))
-  assert.match(textContent(rateFactOf(tree)), /实时(?:速度)?\s*\d+/u, 'the newest response commits')
+  assert.match(textContent(rateFactOf(tree)), /实时(?:速度)?\s*33/u, 'the newest response commits')
+  assert.doesNotMatch(textContent(walk(tree).find((node) => node.props?.className === 'jx-breath-subtitle__status')), /更新中/u, 'the updating hint clears once the response commits')
 
   // 旧 load 的响应后到：epoch 已变 → 丢弃，绝不覆盖新视图。
   stale.resolve(breathResponse({ ok: true, source: 'real', view: { live: { rateQuality: 'estimated', estimateRateTokS: 12 }, last: undefined, recent: [] } }))
   await new Promise((resolve) => setImmediate(resolve))
   tree = walk(result.breathComponent({}))
-  assert.match(textContent(rateFactOf(tree)), /实时(?:速度)?\s*\d+/u, 'the late stale response must not overwrite the newer view')
+  assert.match(textContent(rateFactOf(tree)), /实时(?:速度)?\s*33/u, 'the late stale response must not overwrite the newer view')
   assert.doesNotMatch(textContent(rateFactOf(tree)), /估算(?:速度)?\s*12/u, 'the discarded response never reaches the UI')
 })
 
-test('Breath drops a response whose sessionId disagrees with the committed session', async () => {
+test('Breath accepts a fresh response carrying a new sessionId as a legitimate session switch', async () => {
   const first = makeGate()
   const second = makeGate()
   const result = await renderBreathCurve([45, 50, 25], undefined, undefined, 'completed', {
     allowEmptyCurve: true,
     breathResponses: [() => Promise.resolve(breathResponse({ ok: true, source: 'real', view: { live: { rateQuality: 'exact', estimateRateTokS: 1 }, last: undefined, recent: [] } })), () => first.promise, () => second.promise],
   })
+  // 宿主当前会话是归属的唯一依据：打开浮层的 force load 提交 sess-a 视图并 latch。
   first.resolve(breathResponse({
     ok: true, source: 'real',
     view: { sessionId: 'sess-a', last: { status: 'completed', turn: 1, rateQuality: 'historical', avgTps: 20 }, live: null, recent: [] },
@@ -2270,7 +2316,8 @@ test('Breath drops a response whose sessionId disagrees with the committed sessi
   let tree = walk(result.breathComponent({}))
   assert.match(textContent(rateFactOf(tree)), /最近(?:速度)?\s*20/u, 'the first committed session shows its historical rate')
 
-  // 刷新后新会话视图（sessionId 不同）：epoch 通过但会话自洽校验失败 → 丢弃。
+  // 刷新后响应携带不同 sessionId（sess-b）= 合法会话切换：re-latch 并整体替换
+  // 旧会话视图，绝不丢弃（丢弃正是切换会话后界面永久空白的缺陷）。
   refreshBreath(tree)
   second.resolve(breathResponse({
     ok: true, source: 'real',
@@ -2278,12 +2325,11 @@ test('Breath drops a response whose sessionId disagrees with the committed sessi
   }))
   await new Promise((resolve) => setImmediate(resolve))
   tree = walk(result.breathComponent({}))
-  assert.match(textContent(rateFactOf(tree)), /等待速度数据/u, 'a mismatched session must fail closed into the waiting state')
-  assert.doesNotMatch(textContent(rateFactOf(tree)), /实时/u, 'the other session view never reaches the rate fact')
-  assert.doesNotMatch(textContent(rateFactOf(tree)), /最近(?:速度)?\s*20/u, 'the previous session data is not re-presented as current')
+  assert.match(textContent(rateFactOf(tree)), /实时(?:速度)?\s*33/u, 'a fresh response with a new sessionId commits as a session switch')
+  assert.doesNotMatch(textContent(rateFactOf(tree)), /最近(?:速度)?\s*20/u, 'the previous session data is fully replaced, never blended')
   const latestFooter = walk(result.footerComponent({ wide: true }))
-  assert.match(textContent(sidebarRateRow(latestFooter)), /等待速度数据/u, 'the sidebar stays in the waiting state as well')
-  assert.doesNotMatch(textContent(sidebarRateRow(latestFooter)), /实时/u)
+  assert.match(textContent(sidebarRateRow(latestFooter)), /实时(?:速度)?\s*33/u, 'the sidebar follows the switched session as well')
+  assert.doesNotMatch(textContent(sidebarRateRow(latestFooter)), /最近(?:速度)?\s*20/u)
 })
 
 test('Breath empty projection never shows previous-session data as the current rate', async () => {
@@ -2332,7 +2378,7 @@ test('Historical and session averages are never labelled realtime', async () => 
   }
 })
 
-test('Breath clears the previous view while a fresh load is pending and commits the newest response', async () => {
+test('Breath keeps the previous frame with an updating hint while a same-session refresh is pending', async () => {
   const first = makeGate()
   const second = makeGate()
   const result = await renderBreathCurve([45, 50, 25], undefined, undefined, 'completed', {
@@ -2346,20 +2392,154 @@ test('Breath clears the previous view while a fresh load is pending and commits 
   first.resolve(breathResponse(view('exact', 28)))
   await new Promise((resolve) => setImmediate(resolve))
   let tree = walk(result.breathComponent({}))
-  assert.match(textContent(rateFactOf(tree)), /实时(?:速度)?\s*\d+/u, 'the first committed view is live')
+  assert.match(textContent(rateFactOf(tree)), /实时(?:速度)?\s*28/u, 'the first committed view is live')
 
-  // 刷新 → 新 load 未返回时：旧视图已清（loading 空态），绝不显示上一会话数据。
+  // 同一会话正常刷新 → 保帧：旧视图（28）不清空、不闪烁，仅打「更新中」轻量标记。
   refreshBreath(tree)
   tree = walk(result.breathComponent({}))
-  assert.match(textContent(rateFactOf(tree)), /等待速度数据/u, 'a pending fresh load shows the waiting empty state')
-  assert.doesNotMatch(textContent(rateFactOf(tree)), /28/u, 'the previous session data must not linger while loading')
-  assert.ok(tree.find((node) => node.props?.className === 'jx-curve-empty'), 'the curve is not rendered from stale data')
+  assert.match(textContent(rateFactOf(tree)), /实时(?:速度)?\s*28/u, 'a pending same-session refresh keeps the previous frame')
+  const refreshButton = tree.find((node) => node.props?.['data-jx-refresh'] === 'breath')
+  assert.equal(refreshButton?.props?.['data-refreshing'], 'true', 'the refresh control discloses the in-flight update')
+  assert.equal(refreshButton?.props?.['aria-busy'], 'true', 'the refresh control stays accessible while busy')
+  assert.match(textContent(walk(tree).find((node) => node.props?.className === 'jx-breath-subtitle__status')), /更新中/u, 'the updating hint replaces the old clear-and-flicker behaviour')
 
   second.resolve(breathResponse(view('exact', 55)))
   await new Promise((resolve) => setImmediate(resolve))
   tree = walk(result.breathComponent({}))
-  assert.match(textContent(rateFactOf(tree)), /实时(?:速度)?\s*\d+/u, 'the newest response replaces the waiting state')
-  assert.doesNotMatch(textContent(rateFactOf(tree)), /28/u, 'the old view is gone for good')
+  assert.match(textContent(rateFactOf(tree)), /实时(?:速度)?\s*55/u, 'the newest response replaces the kept frame in place')
+  assert.doesNotMatch(textContent(rateFactOf(tree)), /28/u, 'the old frame is gone once the refresh commits')
+  assert.equal(tree.find((node) => node.props?.['data-jx-refresh'] === 'breath')?.props?.['data-refreshing'], undefined, 'the updating hint clears after commit')
+})
+
+test('Breath follows rapid A→B→A session switches and rejects only superseded responses', async () => {
+  const g1 = makeGate()
+  const g2 = makeGate()
+  const g3 = makeGate()
+  const g4 = makeGate()
+  const sessA = { ok: true, source: 'real', view: { sessionId: 'sess-a', last: { status: 'completed', turn: 1, rateQuality: 'historical', avgTps: 20 }, live: null, recent: [] } }
+  const sessB = { ok: true, source: 'real', view: { sessionId: 'sess-b', live: { rateQuality: 'exact', estimateRateTokS: 33 }, last: undefined, recent: [] } }
+  const result = await renderBreathCurve([45, 50, 25], undefined, undefined, 'completed', {
+    allowEmptyCurve: true,
+    breathResponses: [
+      () => Promise.resolve(breathResponse(sessA)),
+      () => g1.promise,
+      () => g2.promise,
+      () => g3.promise,
+      () => g4.promise,
+    ],
+  })
+  // 打开浮层的 force load 提交 sess-a 并 latch。
+  g1.resolve(breathResponse(sessA))
+  await new Promise((resolve) => setImmediate(resolve))
+  let tree = walk(result.breathComponent({}))
+  assert.match(textContent(rateFactOf(tree)), /最近(?:速度)?\s*20/u, 'session A commits first')
+
+  // A→B：两次连续刷新，第一次（g2）被第二次（g3）取代并 abort。
+  refreshBreath(tree)
+  tree = walk(result.breathComponent({}))
+  refreshBreath(tree)
+  assert.equal(result.requests[2]?.options?.signal?.aborted, true, 'the superseded A-refresh request is aborted')
+  g3.resolve(breathResponse(sessB))
+  await new Promise((resolve) => setImmediate(resolve))
+  tree = walk(result.breathComponent({}))
+  assert.match(textContent(rateFactOf(tree)), /实时(?:速度)?\s*33/u, 'A→B: the newer session commits via re-latch')
+
+  // 被取代的 g2 迟到返回 sess-a 视图：epoch 拒绝（注意：拒绝理由是 epoch，
+  // 不是 sessionId——sess-a 此刻与 latch 不同，但这正是合法切换后的迟到旧帧）。
+  g2.resolve(breathResponse({ ok: true, source: 'real', view: { sessionId: 'sess-a', live: { rateQuality: 'exact', estimateRateTokS: 99 }, last: undefined, recent: [] } }))
+  await new Promise((resolve) => setImmediate(resolve))
+  tree = walk(result.breathComponent({}))
+  assert.match(textContent(rateFactOf(tree)), /实时(?:速度)?\s*33/u, 'the superseded late response never overwrites session B')
+  assert.doesNotMatch(textContent(rateFactOf(tree)), /99/u, 'the late frame never leaks into the UI')
+
+  // B→A：切回 sess-a 的合法切换再次 re-latch 并提交。
+  refreshBreath(tree)
+  tree = walk(result.breathComponent({}))
+  g4.resolve(breathResponse(sessA))
+  await new Promise((resolve) => setImmediate(resolve))
+  tree = walk(result.breathComponent({}))
+  assert.match(textContent(rateFactOf(tree)), /最近(?:速度)?\s*20/u, 'B→A: switching back to session A commits again')
+  assert.doesNotMatch(textContent(rateFactOf(tree)), /实时(?:速度)?\s*33/u, 'session B data is fully replaced')
+})
+
+test('Breath keeps same-session data across repeated refreshes', async () => {
+  const g1 = makeGate()
+  const g2 = makeGate()
+  const g3 = makeGate()
+  const sessA = () => ({ ok: true, source: 'real', view: { sessionId: 'sess-a', live: { rateQuality: 'exact', estimateRateTokS: 33 }, last: undefined, recent: [] } })
+  const result = await renderBreathCurve([45, 50, 25], undefined, undefined, 'completed', {
+    allowEmptyCurve: true,
+    breathResponses: [
+      () => Promise.resolve(breathResponse(sessA())),
+      () => g1.promise,
+      () => g2.promise,
+      () => g3.promise,
+    ],
+  })
+  g1.resolve(breathResponse(sessA()))
+  await new Promise((resolve) => setImmediate(resolve))
+  let tree = walk(result.breathComponent({}))
+  assert.match(textContent(rateFactOf(tree)), /实时(?:速度)?\s*33/u, 'the first committed frame is live')
+
+  // 同一会话重复刷新：pending 期间保帧，提交后数据保持，全程不出现空态/错误。
+  for (const gate of [g2, g3]) {
+    refreshBreath(tree)
+    tree = walk(result.breathComponent({}))
+    assert.match(textContent(rateFactOf(tree)), /实时(?:速度)?\s*33/u, 'the frame is kept while the repeat refresh is pending')
+    gate.resolve(breathResponse(sessA()))
+    await new Promise((resolve) => setImmediate(resolve))
+    tree = walk(result.breathComponent({}))
+    assert.match(textContent(rateFactOf(tree)), /实时(?:速度)?\s*33/u, 'same-session data survives the repeat refresh')
+    assert.doesNotMatch(textContent(tree), /刷新失败|刷新超时/u, 'a healthy repeat refresh never surfaces an error')
+  }
+})
+
+test('Breath surfaces a timeout error with a retry entry after the request aborts', async () => {
+  const result = await renderBreathCurve([45, 50, 25], undefined, undefined, 'completed', {
+    allowEmptyCurve: true,
+    breathResponses: [
+      () => Promise.resolve(breathResponse({ ok: true, source: 'real', view: { live: { rateQuality: 'exact', estimateRateTokS: 1 }, last: undefined, recent: [] } })),
+      // 打开浮层的 force load 挂起，直到 12s 超时 abort 将其以 AbortError 拒绝。
+      (requestOptions) => new Promise((_, reject) => {
+        requestOptions.signal.addEventListener('abort', () => reject(makeAbortError()))
+      }),
+      // 错误态下重新渲染浮层会触发一次非 force 兜底 load（current.ok=false 不冷却），
+      // 与重试点击各消费一个相同的好响应——顺序不敏感，最终都提交同一会话视图。
+      () => Promise.resolve(breathResponse({ ok: true, source: 'real', view: { live: { rateQuality: 'exact', estimateRateTokS: 33 }, last: undefined, recent: [] } })),
+      () => Promise.resolve(breathResponse({ ok: true, source: 'real', view: { live: { rateQuality: 'exact', estimateRateTokS: 33 }, last: undefined, recent: [] } })),
+    ],
+  })
+  // 触发 breath 请求的 12s 超时（手动计时器，无需真实等待）。
+  const fired = result.fireTimeout(12000)
+  assert.ok(fired, 'the breath request arms its timeout timer')
+  await new Promise((resolve) => setImmediate(resolve))
+  await new Promise((resolve) => setImmediate(resolve))
+  let tree = walk(result.breathComponent({}))
+  assert.match(textContent(tree), /刷新超时，请检查网络后重试/u, 'a timed-out request lands in the error state')
+  const retry = walk(tree).find((node) => node.props?.['aria-label'] === '重试刷新呼吸节奏')
+  assert.ok(retry, 'the error state exposes a retry entry')
+
+  // 重试 → 新请求提交后错误态解除、数据恢复。
+  retry.props.onClick()
+  await new Promise((resolve) => setImmediate(resolve))
+  await new Promise((resolve) => setImmediate(resolve))
+  tree = walk(result.breathComponent({}))
+  assert.match(textContent(rateFactOf(tree)), /实时(?:速度)?\s*33/u, 'the retry restores the view')
+  assert.doesNotMatch(textContent(tree), /刷新超时/u, 'the timeout error clears after a successful retry')
+})
+
+test('Stale snapshot discloses the update time alongside the data-older mark', async () => {
+  const result = await renderBreathCurve([45, 50, 25], undefined, undefined, 'completed', {
+    source: 'persisted',
+    stale: true,
+    lastRateQuality: 'historical',
+    lastAvgTps: 84,
+  })
+  const subtitle = walk(result.tree).find((node) => node.props?.className === 'jx-breath-subtitle__status')
+  assert.match(textContent(subtitle), /已保存快照 · 刷新可重新抓取 · 更新于 \d{2}:\d{2}/u, 'stale data carries its real update timestamp')
+  const row = sidebarRateRow(result.footerTree)
+  assert.match(row.props.title ?? '', /数据较旧 · 更新于 \d{2}:\d{2}/u, 'the sidebar stale mark keeps the update time in its tooltip')
+  assert.match(textContent(row), /数据较旧/u, 'the data-older mark stays visible')
 })
 
 test('Stale snapshot rate keeps the data-older suffix and never claims realtime', async () => {

@@ -26,6 +26,7 @@ import {
   updateDecision,
 } from '../lib/dsh-update.js'
 import { createAssetRouteHandler } from '../lib/asset-route.js'
+import { apply } from '../lib/index.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -595,4 +596,94 @@ test('icon asset route keeps encoded separators inside the icon root', async () 
   } finally {
     await rm(root, { recursive: true, force: true })
   }
+})
+
+// ── V1.0.1 纯粹版只读边界：lifecycle 路由默认不注册，显式开启后保护逻辑不变 ──
+
+const ROUTE_TEST_STATE_FILE = join(tmpdir(), `dsh-jingxi-lifecycle-route-${process.pid}.json`)
+
+function makeHostHarness(options = {}) {
+  const handlers = new Map()
+  const ctx = {
+    webServer: {
+      register(meta) { handlers.set(meta.path, meta.handler); return () => {} },
+    },
+    effect(effect) { return effect() },
+    inject() {},
+    on() {},
+    credentials: undefined,
+    logger: {},
+  }
+  apply(ctx, { stateFile: ROUTE_TEST_STATE_FILE, ...options })
+  return handlers
+}
+
+function recordResponse() {
+  const result = { status: undefined, body: undefined }
+  return {
+    result,
+    response: {
+      writeHead(status) { result.status = status },
+      end(body) { result.body = body },
+    },
+  }
+}
+
+function trustedLifecyclePost(body) {
+  const payload = typeof body === 'string' ? body : JSON.stringify(body)
+  return {
+    method: 'POST',
+    url: '/api/jingxi/lifecycle',
+    socket: { remoteAddress: '127.0.0.1' },
+    headers: { host: '127.0.0.1:3080', origin: 'http://127.0.0.1:3080' },
+    async *[Symbol.asyncIterator]() { yield Buffer.from(payload) },
+  }
+}
+
+test('lifecycle mutation route is not registered under the default read-only config', () => {
+  const handlers = makeHostHarness()
+
+  assert.equal(handlers.has('/api/jingxi/lifecycle'), false, '默认配置下写端点在路由层不存在（404）')
+  // 只读端点保持原样注册。
+  for (const path of [
+    '/api/jingxi/status',
+    '/api/jingxi/update',
+    '/api/jingxi/update-check',
+    '/api/jingxi/update/status',
+    '/api/jingxi/breath/current',
+  ]) {
+    assert.equal(typeof handlers.get(path), 'function', `${path} 只读端点应保持注册`)
+  }
+})
+
+test('lifecycle route registers only with explicit jingxiOps opt-in and keeps every guard rail', async () => {
+  const handlers = makeHostHarness({ jingxiOps: true })
+  const lifecycle = handlers.get('/api/jingxi/lifecycle')
+  assert.equal(typeof lifecycle, 'function', '显式 jingxiOps: true 时写端点注册')
+
+  // 405：非 POST 方法拒绝。
+  const methodDenied = recordResponse()
+  await lifecycle({ method: 'GET', url: '/api/jingxi/lifecycle' }, methodDenied.response)
+  assert.equal(methodDenied.result.status, 405)
+
+  // 403：非回环/非同源请求拒绝。
+  const untrusted = recordResponse()
+  await lifecycle({
+    method: 'POST',
+    url: '/api/jingxi/lifecycle',
+    socket: { remoteAddress: '10.0.0.4' },
+    headers: { host: '127.0.0.1:3080', origin: 'http://127.0.0.1:3080' },
+  }, untrusted.response)
+  assert.equal(untrusted.result.status, 403)
+
+  // 400：非法 JSON 请求体拒绝。
+  const malformed = recordResponse()
+  await lifecycle(trustedLifecyclePost('not-json{'), malformed.response)
+  assert.equal(malformed.result.status, 400)
+
+  // 400：action 白名单外的动作拒绝（不触发任何更新/重启执行）。
+  const invalidAction = recordResponse()
+  await lifecycle(trustedLifecyclePost({ action: 'stop' }), invalidAction.response)
+  assert.equal(invalidAction.result.status, 400)
+  assert.equal(JSON.parse(invalidAction.result.body).state, 'invalid-action')
 })

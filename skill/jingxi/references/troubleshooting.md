@@ -2,37 +2,38 @@
 
 ## 安装后侧边栏没有鲸息
 
-1. 运行 doctor.ps1，确认 `web profile cordis.patch.yml 含 jingxi 条目`。
-2. 确认插件文件已部署：`$DSH_HOME/profiles/web/plugins/jingxi-plugin.mjs`。
-3. 重启 DSH web（写 `restart.requested` marker 由外部 Guardian/watchdog 处理，
-   不要在会话内直接重启）。
+1. 运行 doctor.ps1，确认 `web profile cordis.patch.yml 含 dsh-jingxi 注册行`。
+2. 确认插件包已部署：`<home>\profiles\node_modules\dsh-jingxi\lib\index.js`
+   存在且非零（doctor 会逐项校验）。
+3. 重启 DSH web（由外部 watchdog 或用户手动处理，不要在会话内直接重启）。
 4. 若 cordis.patch.yml 有语法问题，检查 YAML 缩进（`- insert:` 下子项必须缩进）。
 
-## DSH 关闭后打不开 3081
+## install.ps1 报「未发现任何 DSH home」
 
-1. 确认 Jingxi Host 已部署并运行：`$DSH_HOME/jingxi/bin/jingxi-host.mjs`。
-2. doctor 会显示 `Jingxi Host (:3081)` 状态；若 FAIL，先运行 install.ps1。
-3. 确认 3081 未被未知进程占用；未知进程占用时 fail-closed，不自动 kill。
+1. CLI 场景：确认 `$env:DSH_HOME` 或缺省 `C:\Users\wx\.dsh` 存在。
+2. Desktop 场景：确认 `$env:APPDATA\dsh-desktop\harness` 存在。
+3. 或用 `-DshHome <路径>` 显式指定单个目标。
 
-## 重启很慢 / 超过 5 秒
+## install.ps1 报「源文件缺失」
 
-1. 重启目标是 marker fast path 500ms + health slow path 10–15s。
-2. 确认 Guardian 在运行（guardian.log 在写）。
-3. 检查是否有旧 watchdog 实例与 Guardian 同时消费 marker（应只保留一个 owner）。
+仓库不完整（缺 lib/client.js、lib/index.js、package.json 或 cordis.patch.yml）。
+脚本会在任何写动作之前终止，不会留下半截部署。重新 clone/pull
+whale-breath 仓库后重试。
 
-## 额度不显示
+## update.ps1 报「git pull 失败」
 
-1. 额度数据来自 quota adapter/store；先确认 DSH 页面原有 quota 面板正常。
-2. rail 模式要求两个 provider 独立状态点 + 金额/百分比，禁止隐藏。
+pull 失败即终止，未改动任何部署。检查网络/远程/本地是否有未提交修改
+（--ff-only 要求可快进），处理后重跑。
+
+## 更新后插件异常
+
+update.ps1 部署前已把旧版本备份到 `<home>\jingxi\backups\<版本>-<时间戳>\`；
+部署验证失败会自动回滚。若需手动回滚，把备份目录里的 `dsh-jingxi`
+整体复制回 `<home>\profiles\node_modules\dsh-jingxi` 即可。
 
 ## 「检查 DSH 更新」与「升级鲸息」的区别
 
-- 鲸息页面「检查 DSH 更新」→ 只针对 `deepseek-ai/deepseek-harness` 官方发布。
+- 鲸息设置区「诊断与修复」的 DSH 更新检查 → 只读针对
+  `deepseek-ai/deepseek-harness` 官方发布，界面无更新/重启按钮。
 - Skill `update.ps1` → 只更新鲸息自身。
-- doctor 分别报告 Jingxi Version 与 DSH Version。
-
-## 更新被 blocked
-
-- 安装来源 unknown / desktop-managed / source-checkout 有未提交修改 → 一律 blocked。
-- 鲸息未验证的 DSH 版本 → 显示「有新版本但鲸息尚未验证兼容」，默认禁止 apply。
-- 官方来源链（tag→commit→package.json version）不通过 → blocked。
+- doctor 报告的是鲸息部署版本（manifest 与包 package.json 一致性）。

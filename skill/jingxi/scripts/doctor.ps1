@@ -1,10 +1,10 @@
-# doctor.ps1 — 鲸息 V3.0 诊断（jingxi Skill 动作之一）
+# doctor.ps1 — 鲸息 V1.0.1 诊断（jingxi Skill 动作之一）
 #
-# 检查项：DSH / Jingxi Host / Guardian / 插件注册 / 更新能力。
+# 只校验真实部署物：包文件齐全 + 注册行存在 + 版本一致。
 # 只读诊断：不做任何修改。
 [CmdletBinding()]
 param(
-  [string]$DshHome = $env:DSH_HOME
+  [string]$DshHome
 )
 
 $ErrorActionPreference = 'Continue'
@@ -15,80 +15,78 @@ function Warn($m) { Write-Host "  [WARN] $m" -ForegroundColor Yellow }
 function Fail($m) { Write-Host "  [FAIL] $m" -ForegroundColor Red }
 function Info($m) { Write-Host "  [info] $m" -ForegroundColor Gray }
 
-# ———— DSH 定位 ————
-if (-not $DshHome) { $DshHome = "C:\Users\wx\.dsh" }
-Section "DSH"
-if (Test-Path $DshHome) {
-  Ok "DSH_HOME = $DshHome"
-  $profiles = Join-Path $DshHome 'profiles'
-  if (Test-Path $profiles) {
-    $names = (Get-ChildItem $profiles -Directory | Select-Object -ExpandProperty Name) -join ', '
-    Info "profiles: $names"
-  }
+# ———— 目标探测（与 install.ps1 同规则） ————
+$targets = @()
+if ($DshHome) {
+  $targets += $DshHome
 } else {
-  Fail "DSH_HOME 不存在: $DshHome"
+  $cliHome = if ($env:DSH_HOME) { $env:DSH_HOME } else { 'C:\Users\wx\.dsh' }
+  $desktopHome = Join-Path $env:APPDATA 'dsh-desktop\harness'
+  if (Test-Path $cliHome)     { $targets += $cliHome }
+  if (Test-Path $desktopHome) { $targets += $desktopHome }
 }
 
-# ———— DSH 运行状态 ————
+Section "DSH homes"
+if ($targets.Count -eq 0) {
+  Fail "未发现任何 DSH home（CLI/Desktop）"
+} else {
+  foreach ($t in $targets) { Ok "发现: $t" }
+}
+
+# ———— DSH 运行状态（只读） ————
 Section "DSH Runtime"
 try {
   $h = Invoke-RestMethod -Uri 'http://127.0.0.1:3080/api/system/health' -TimeoutSec 4
-  if ($h.ready) {
-    Ok "DSH ready (bootId=$($h.bootId), pid=$($h.pid))"
+  if ($h.ready) { Ok "DSH ready (bootId=$($h.bootId), pid=$($h.pid))" }
+  else { Warn "DSH 可达但未 ready" }
+} catch {
+  Info "DSH :3080 不可达（可能已关闭，不影响部署校验）"
+}
+
+$keyFiles = @('lib\index.js', 'lib\client.js', 'package.json', 'cordis.patch.yml')
+
+foreach ($targetHome in $targets) {
+  Section "部署校验: $targetHome"
+
+  if (-not (Test-Path $targetHome)) { Fail "home 不存在: $targetHome"; continue }
+
+  # 包文件齐全
+  $pkgDst = Join-Path $targetHome 'profiles\node_modules\dsh-jingxi'
+  if (Test-Path $pkgDst) {
+    $missing = @()
+    foreach ($rel in $keyFiles) {
+      $p = Join-Path $pkgDst $rel
+      if (-not (Test-Path $p) -or (Get-Item $p).Length -eq 0) { $missing += $rel }
+    }
+    if ($missing.Count -eq 0) { Ok "包文件齐全（$($keyFiles -join ', ')）" }
+    else { Fail "包文件缺失或为空: $($missing -join ', ')" }
   } else {
-    Warn "DSH 可达但未 ready"
+    Fail "dsh-jingxi 包未部署: $pkgDst"
   }
-} catch {
-  Warn "DSH :3080 不可达（可能已关闭，正常）"
-}
 
-# ———— Jingxi Host ————
-Section "Jingxi Host (:3081)"
-try {
-  $s = Invoke-RestMethod -Uri 'http://127.0.0.1:3081/api/status' -TimeoutSec 4
-  Ok "Host 响应: state=$($s.state)"
-} catch {
-  Fail "Jingxi Host :3081 不可达（需要 install 部署）"
-}
+  # 注册行存在
+  $patchPath = Join-Path $targetHome 'profiles\web\cordis.patch.yml'
+  if (Test-Path $patchPath) {
+    $content = Get-Content $patchPath -Raw
+    if ($content -match 'name:\s*dsh-jingxi') { Ok "web profile cordis.patch.yml 含 dsh-jingxi 注册行" }
+    else { Warn "web profile 未注册 dsh-jingxi 插件" }
+  } else {
+    Warn "web profile cordis.patch.yml 不存在: $patchPath"
+  }
 
-# ———— Guardian ————
-Section "Guardian"
-$guardianLog = "$DshHome\jingxi\logs\guardian.log"
-if (Test-Path $guardianLog) {
-  Ok "guardian.log 存在 ($((Get-Item $guardianLog).Length) bytes)"
-} else {
-  Warn "guardian.log 不存在（Guardian 未运行或未部署）"
-}
-# legacy watchdog fallback
-$wdLog = "C:\Users\wx\.dsh-install\logs\watchdog.log"
-if (Test-Path $wdLog) { Info "legacy watchdog.log 存在（兼容期）" }
-
-# ———— 插件注册 ————
-Section "Plugin 注册"
-$patch = Join-Path $DshHome 'profiles\web\cordis.patch.yml'
-if (Test-Path $patch) {
-  $content = Get-Content $patch -Raw
-  if ($content -match 'jingxi') { Ok "web profile cordis.patch.yml 含 jingxi 条目" }
-  else { Warn "web profile 未注册 jingxi 插件" }
-} else {
-  Warn "web profile cordis.patch.yml 不存在"
-}
-
-# ———— Skill ————
-Section "Skill"
-$skill = Join-Path $DshHome 'skills\jingxi\SKILL.md'
-if (Test-Path $skill) { Ok "skill 已安装: $skill" }
-else { Fail "skill 未安装（先运行 bootstrap/Install-JingxiSkill.ps1）" }
-
-# ———— 更新能力 ————
-Section "更新能力"
-$dshPkg = 'C:\Users\wx\.dsh-install\node_modules\@deepseek-ai\dsh\package.json'
-if (Test-Path $dshPkg) {
-  $v = (Get-Content $dshPkg -Raw | ConvertFrom-Json).version
-  Ok "DSH 版本: $v"
-  Info "安装来源: local node_modules（pnpm workspace）→ update executor 待 Gate 7 验证"
-} else {
-  Warn "无法定位 DSH package.json"
+  # 版本一致（部署包 vs manifest）
+  $manifestPath = Join-Path $targetHome 'jingxi\manifest.json'
+  $pkgJsonPath = Join-Path $pkgDst 'package.json'
+  if ((Test-Path $manifestPath) -and (Test-Path $pkgJsonPath)) {
+    $mVer = (Get-Content $manifestPath -Raw | ConvertFrom-Json).version
+    $pVer = (Get-Content $pkgJsonPath -Raw | ConvertFrom-Json).version
+    if ($mVer -eq $pVer) { Ok "版本一致: manifest=$mVer, package=$pVer" }
+    else { Fail "版本不一致: manifest=$mVer, package=$pVer（建议重跑 install/update）" }
+  } elseif (Test-Path $pkgJsonPath) {
+    Warn "manifest 不存在（可能非本 skill 安装）: $manifestPath"
+  } else {
+    Info "无部署可比对版本"
+  }
 }
 
 Write-Host ""

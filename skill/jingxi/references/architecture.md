@@ -1,46 +1,43 @@
-# 鲸息运行时架构（jingxi）
+# 鲸息部署架构（jingxi V1.0.1 Pure Breath）
+
+V1.0.1 起鲸息是**纯 cordis 插件包**，无独立 Host / Guardian / 离线页，
+无任何长期运行进程。
 
 ```
-用户（DSH 页面 / 浏览器 / 未来 EXE）
+用户（DSH 页面 / 浏览器）
       │
       ▼
-Jingxi Plugin（packages/jingxi-plugin，注入 DSH web）
-  ├─ SidebarDock：额度摘要 + [重启 | 鲸息 | 关闭]（full/mid/rail）
-  ├─ 鲸息单页控制台（/jingxi）
-  └─ WhaleBreathIcon（currentColor，官方 FishLogo 几何 + 喷水线）
-      │  只请求动作，不执行任何进程操作
-      ▼
-Jingxi Host（runtime/jingxi-host，127.0.0.1:3081，loopback only）
-  ├─ GET /api/status /api/version /api/update/status /api/logs
-  ├─ POST /api/start /api/stop /api/restart   （写 marker，不 kill）
-  ├─ POST /api/update/check /api/update/apply （受控 Update Core 执行）
-  └─ DSH 已关闭时的离线页（一键启动）
-      │  写 marker
-      ▼
-Guardian（runtime/guardian，Start-Jingxi-Guardian.ps1，唯一生命周期 owner）
-  ├─ Fast Path 500ms：消费 restart/stop/start.requested
-  ├─ Slow Path 10–15s：DSH 被动宕机 / Host 存活 / crash loop
-  └─ 单实例（mutex/lock）
-      │
-      ▼
-DSH 进程（Guardian 唯一负责启动/停止/重启）
+dsh-jingxi 插件包（profiles/node_modules/dsh-jingxi，注入 DSH web）
+  ├─ 侧栏鲸鱼入口（currentColor，官方 FishLogo 几何 + 喷水线）
+  └─ 呼吸轨迹浮层：基础调用事实（轮次/Token/时长/Cache/速度）
+     + 呼吸曲线（事件刻度、Event Rail、最近 5 轮、阶段故事）
 ```
 
-## 模块
+## 部署布局
 
-| 模块 | 路径 | 来源 donor |
-|---|---|---|
-| Jingxi Plugin | `packages/jingxi-plugin/` | dsh-lifecycle UI + dsh-quota-panel |
-| Update Core | `packages/update-core/` | dsh-control-center `update-provider` |
-| contracts | `packages/contracts/` | 新（契约优先） |
-| Jingxi Host | `runtime/jingxi-host/` | dsh-lifecycle `dsh-controller.mjs` |
-| Guardian | `runtime/guardian/` | dsh-lifecycle `Start-DSH-Watchdog.ps1` |
+| 内容 | 位置 |
+|---|---|
+| 插件包 | `<home>\profiles\node_modules\dsh-jingxi\`（lib/ assets/icons/ test/ package.json cordis.patch.yml README.md） |
+| 插件注册 | `<home>\profiles\web\cordis.patch.yml` 中 `- insert:` 行（id: jingxi, name: dsh-jingxi, inject: [webServer]） |
+| manifest | `<home>\jingxi\manifest.json`（只记真实部署的文件） |
+| 更新备份 | `<home>\jingxi\backups\<版本>-<时间戳>\dsh-jingxi\` |
+
+`<home>` 自动探测：CLI home（`$env:DSH_HOME`，缺省 `C:\Users\wx\.dsh`）
+与 Desktop harness（`$env:APPDATA\dsh-desktop\harness`），存在的才部署。
+
+## 源仓库
+
+whale-breath（`C:\Users\wx\whale-breath`）仓库根目录即插件包根：
+`lib/`、`assets/icons/`、`test/`、`package.json`、`cordis.patch.yml`。
+install.ps1 从仓库根部署；update.ps1 从 `$RepoPath\skill\jingxi\scripts\install.ps1`
+执行，保证源脚本一致。
 
 ## 所有权与安全边界
 
-- JINGXI_HOME = `$DSH_HOME/jingxi/`（bin/state/logs/backups/manifest.json/config.json）
-- marker 在 `state/`；日志拆分 guardian.log / host.log / install.log / jingxi-update.log / dsh-update.log
-- 浏览器/插件只能请求动作；Host 验证并写 marker；Guardian 唯一消费 marker
-- Host loopback only + Host header 校验 + CSRF nonce + 无 CORS `*`
-- API key 只在 host 侧；session/model UI 不显示 secrets
-- 更新只认 `deepseek-ai/deepseek-harness` 官方 `dsh-v<semver>` tag 链；未知来源 fail-closed
+- 安装/升级脚本不修改 DSH 官方源码、不 kill 进程、不在会话内重启 DSH。
+- 源文件缺失在任何写动作之前 throw；任何一步失败即终止，不留"假完成"。
+- update.ps1 部署前备份现部署目录，验证失败自动回滚。
+- uninstall.ps1 只移除真实部署物，幂等，不碰未知文件。
+- 鲸息 UI 只读呈现调用事实；DSH 官方更新检查在设置区「诊断与修复」中
+  只读呈现（针对 deepseek-ai/deepseek-harness 官方发布），界面不提供
+  更新/重启按钮。
