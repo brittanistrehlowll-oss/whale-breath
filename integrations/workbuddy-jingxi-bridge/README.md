@@ -4,6 +4,13 @@ WorkBuddy → Jingxi Bridge → DSH Runtime 的**只读**桥接组件。
 定位：让 WorkBuddy 能真实读取鲸息运行态（版本/状态/呼吸快照/会话摘要），
 **不**构成完整 WorkBuddy 产品集成，**不**承担安装/升级/卸载/生命周期控制。
 
+> This component provides read-only WorkBuddy access to Jingxi runtime facts.
+> It does not provide fresh model requests, DSH lifecycle control, or full WorkBuddy product integration.
+>
+> 本组件仅提供 WorkBuddy 对鲸息运行事实的只读读取能力。
+> 不发起模型请求，不控制 DSH 生命周期，不执行安装、更新或卸载，
+> 不等于鲸息已经完成 WorkBuddy 全量业务集成。
+
 ## 边界
 
 - 仅回环（`127.0.0.1 / localhost / [::1]`）、仅 GET、零外部网络；

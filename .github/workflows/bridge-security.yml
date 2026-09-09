@@ -1,0 +1,33 @@
+name: bridge-security
+
+on:
+  push:
+    branches: [main, 'feat/**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  security:
+    name: bridge 安全边界扫描
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 三作用域静态安全扫描
+        run: node integrations/workbuddy-jingxi-bridge/scripts/security-scan.mjs
+
+      - name: 桥实现禁用面复核（无非回环 URL / 无写动词 / 无凭据引用）
+        run: |
+          ! grep -nE "method: *['\"](POST|PUT|PATCH|DELETE)['\"]" integrations/workbuddy-jingxi-bridge/scripts/bridge.mjs
+          test -z "$(grep -nE 'https?://' integrations/workbuddy-jingxi-bridge/scripts/bridge.mjs | grep -vE '127\.0\.0\.1|localhost|\[::1\]|\$\{HOST\}')"
+          ! grep -niE "authorization|apikey|api_key|bearer|password" integrations/workbuddy-jingxi-bridge/scripts/bridge.mjs
+          ! grep -niE "\b(token|cookie|secret)\b" integrations/workbuddy-jingxi-bridge/scripts/bridge.mjs
+
+      - name: 会话脱敏规则复核（仅前 8 位别名）
+        run: grep -n "slice(0, 8)" integrations/workbuddy-jingxi-bridge/scripts/bridge.mjs

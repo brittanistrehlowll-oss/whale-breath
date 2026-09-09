@@ -1,0 +1,30 @@
+name: bridge-regression
+
+on:
+  push:
+    branches: [main, 'feat/**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  regression:
+    name: 核心回归不受 Bridge 影响（Node ${{ matrix.node }}）
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24']
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 安装 Node ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: 鲸息核心套件（220 基线）
+        run: node --test "test/*.test.mjs"
+
+      - name: Bridge 套件（20 基线）
+        run: node --test "integrations/workbuddy-jingxi-bridge/tests/*.test.mjs"

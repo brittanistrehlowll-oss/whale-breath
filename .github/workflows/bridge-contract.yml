@@ -1,0 +1,33 @@
+name: bridge-contract
+
+on:
+  push:
+    branches: [main, 'feat/**']
+  pull_request:
+    branches: [main]
+
+jobs:
+  contract:
+    name: bridge 合同与七态（Node ${{ matrix.node }}）
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22', '24']
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 安装 Node ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Bridge 合同一致性测试
+        run: node --test "integrations/workbuddy-jingxi-bridge/tests/bridge-contract.test.mjs"
+
+      - name: Bridge 七态状态机测试（stub，不触真实 DSH）
+        run: node --test "integrations/workbuddy-jingxi-bridge/tests/bridge-states.test.mjs"
+
+      - name: 合同 JSON 可解析
+        run: node -e "const c=require('./integrations/workbuddy-jingxi-bridge/bridge-contract.json'); if(c.version!=='0.1.0') throw new Error('contract version drift'); console.log('contract OK', c.methods.length, 'methods', c.states.length, 'states')"
