@@ -1,0 +1,109 @@
+{
+  "contract": "workbuddy-jingxi-readonly-bridge",
+  "version": "0.1.0",
+  "role": "workbuddy-readonly-dsh-bridge",
+  "updatedAt": "2026-09-09",
+  "hostPolicy": {
+    "allowedHosts": ["127.0.0.1", "localhost", "[::1]"],
+    "defaultPort": 3080,
+    "portSource": "cli-arg --port or DSH default 3080",
+    "scheme": "http",
+    "externalNetwork": "forbidden"
+  },
+  "transport": {
+    "methods": ["GET"],
+    "timeoutMs": 3500,
+    "retry": "none",
+    "writeOperations": "forbidden",
+    "dshLifecycleControl": "forbidden (no start/stop/restart/watchdog)"
+  },
+  "envelope": {
+    "shape": {
+      "ok": "boolean",
+      "state": "one of states[]",
+      "method": "contract method name",
+      "observedAt": "ISO-8601",
+      "runtime": "'desktop' | 'cli' | null",
+      "data": "object|null (allowlisted)",
+      "warnings": "string[]",
+      "error": "null | { code, message }"
+    },
+    "errorCodes": [
+      "LOOPBACK_REFUSED",
+      "LOOPBACK_TIMEOUT",
+      "JINGXI_HTTP_404",
+      "UPSTREAM_NON_JSON",
+      "UPSTREAM_HTTP_ERROR",
+      "VERSION_MISMATCH",
+      "NO_SESSION",
+      "BRIDGE_INTERNAL_ERROR"
+    ]
+  },
+  "states": [
+    { "name": "DSH_RUNNING", "meaning": "loopback reachable; health + jingxi contracts hold", "failure": false },
+    { "name": "STALE_SNAPSHOT", "meaning": "real/persisted data but source=persisted or stale=true; NOT live", "failure": false },
+    { "name": "NO_SESSION", "meaning": "DSH/jingxi available but no target session/breath summary", "failure": false },
+    { "name": "DSH_NOT_RUNNING", "meaning": "loopback connection refused/timeout/not listening", "failure": "controlled-expected" },
+    { "name": "JINGXI_NOT_REGISTERED", "meaning": "DSH up but jingxi endpoints 404 or contract absent", "failure": true },
+    { "name": "VERSION_MISMATCH", "meaning": "actual version != expected/allowed version", "failure": true },
+    { "name": "RUNTIME_ERROR", "meaning": "any other controlled error; raw sensitive bodies never leaked", "failure": true }
+  ],
+  "methods": [
+    {
+      "name": "jingxi.runtime.health",
+      "cli": "health",
+      "http": "GET",
+      "path": "/api/system/health",
+      "allowlist": ["ready", "bootId", "pid", "uptime"]
+    },
+    {
+      "name": "jingxi.status",
+      "cli": "status",
+      "http": "GET",
+      "path": "/api/jingxi/status",
+      "allowlist": ["jingxiVersion", "packageVersion", "designVersion", "projectionRegistered", "realListening"],
+      "versionCheck": "--expect-version <x> → VERSION_MISMATCH when packageVersion != x"
+    },
+    {
+      "name": "jingxi.breath.current",
+      "cli": "breath",
+      "http": "GET",
+      "path": "/api/jingxi/breath/current",
+      "allowlist": ["real", "demo", "source", "stale", "sessionAlias", "kind", "lastTurn{turn,status,durationMs,curveQuality,toolWorkMs,llmMs}", "updatedAt"],
+      "staleRule": "view.kind !== 'live' OR source === 'persisted' → STALE_SNAPSHOT"
+    },
+    {
+      "name": "jingxi.session.summary",
+      "cli": "session",
+      "http": "GET",
+      "path": "/api/jingxi/status + /api/jingxi/breath/current",
+      "allowlist": ["version{packageVersion,designVersion}", "sessionExists", "sessionAlias", "kind", "freshness", "real", "demo", "source", "stale", "roundCount", "stepCount", "turns{lastTurn,status}", "statusSummary", "updatedAt"]
+    }
+  ],
+  "sessionAliasRule": "first 8 chars of sessionId; never the full id",
+  "denylist": [
+    "full sessionId",
+    "prompt/response bodies",
+    "provider account data",
+    "balance/quota details",
+    "Token",
+    "Cookie",
+    "Authorization",
+    "apiKey",
+    "secret",
+    "password",
+    "real absolute user paths",
+    "raw HTTP error bodies"
+  ],
+  "nonGoals": [
+    "POST/PUT/PATCH/DELETE of any kind",
+    "model requests or provider calls",
+    "credit/token consumption",
+    "file upload of any kind",
+    "DSH config modification",
+    "DSH lifecycle control (start/stop/restart/watchdog)",
+    "log bodies or session bodies exfiltration",
+    "credential access of any kind",
+    "full WorkBuddy product integration"
+  ]
+}

@@ -981,7 +981,7 @@ test('Breath keeps a three-fact runtime band without duplicating host lifecycle 
   const tokenKpi = result.tree.find((node) => node.props?.['data-metric'] === 'tokens')
   assert.match(textContent(tokenKpi), /7\.37M/u, 'the token total lives in the KPI row (v2.1)')
   const durationKpi = result.tree.find((node) => node.props?.['data-metric'] === 'duration')
-  assert.match(textContent(durationKpi), /1h4m/u, 'the session duration lives in the KPI row (v2.1)')
+  assert.match(textContent(durationKpi), /1 小时 4 分/u, 'the session duration lives in the KPI row (v2.1)')
   assert.equal(result.tree.some((node) => node.props?.className === 'jx-dashboard-side'), false)
 })
 
@@ -2344,7 +2344,7 @@ test('Breath empty projection never shows previous-session data as the current r
   })
   const text = textContent(result.tree)
   assert.ok(result.tree.find((node) => node.props?.className === 'jx-curve-empty'), 'no data means the curve stays in its empty state')
-  assert.match(textContent(rateFactOf(result.tree)), /等待速度数据/u, 'fail-closed: no data → no rate value at all')
+  assert.match(textContent(rateFactOf(result.tree)), /等待数据/u, 'fail-closed: no data → no rate value at all')
   assert.doesNotMatch(textContent(rateFactOf(result.tree)), /31/u, 'the recent-active 31 tok/s must not leak into the current fact')
   assert.doesNotMatch(textContent(rateFactOf(result.tree)), /tok\/s/u, 'no data → no unit is fabricated')
   assert.doesNotMatch(text, /最近活跃/u, 'no global-recent copy may masquerade as the current projection')
@@ -2356,7 +2356,7 @@ test('Rate copy maps the five server tiers in the sidebar and the fact band', as
     { name: 'estimated', options: { live: { rateQuality: 'estimated', estimateRateTokS: 12 } }, footer: /估算(?:速度)?\s*12\s*tok\/s/u, fact: /估算(?:速度)?\s*12/u, state: 'live' },
     { name: 'historical', options: { lastRateQuality: 'historical', lastAvgTps: 84 }, footer: /最近(?:速度)?\s*84\s*tok\/s/u, fact: /最近(?:速度)?\s*84/u, state: 'settled' },
     { name: 'session', options: { sessionSummary: { rateQuality: 'session', avgTps: 42, cachePct: 0.5 } }, footer: /平均(?:速度)?\s*42\s*tok\/s/u, fact: /平均(?:速度)?\s*42/u, state: 'settled' },
-    { name: 'waiting', options: {}, footer: /等待速度数据/u, fact: /等待速度数据/u, state: 'waiting' },
+    { name: 'waiting', options: {}, footer: /等待数据/u, fact: /等待数据/u, state: 'waiting' },
   ]
   for (const c of cases) {
     const result = await renderBreathCurve([45, 50, 25], undefined, undefined, 'completed', c.options)
